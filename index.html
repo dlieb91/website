@@ -92,6 +92,21 @@ th:first-child{z-index:4;background:#e2e8f0}
     </div>
     <p id="sheetLinkWrap" class="hint hidden">Tabelle: <a id="sheetLink" class="link" href="#" target="_blank" rel="noopener">in Google Drive öffnen</a></p>
     <hr>
+    <h3 style="margin:0">Lokale Datei</h3>
+    <p class="hint">Alternativ (oder zusätzlich) können deine Daten direkt in einer Datei auf deinem Gerät gespeichert werden, z.&nbsp;B. in einem iCloud/OneDrive-Ordner zum Abgleich zwischen Geräten.</p>
+    <div class="actions" id="fileActionsSupported">
+      <button class="btn" id="createFileBtn">Neue Datei erstellen</button>
+      <button class="btn" id="openFileBtn">Vorhandene Datei öffnen</button>
+      <button class="btn hidden" id="reconnectFileBtn">Zugriff erneut bestätigen</button>
+      <span id="fileStatus" class="syncStatus"></span>
+    </div>
+    <div class="actions hidden" id="fileActionsFallback">
+      <button class="btn" id="exportFileBtn">Als Datei exportieren</button>
+      <button class="btn" id="importFileBtn">Datei importieren…</button>
+      <input type="file" id="importFileInput" accept="application/json" class="hidden">
+      <span class="hint">Dein Browser unterstützt kein automatisches Speichern in eine Datei – Export/Import erfolgt manuell.</span>
+    </div>
+    <hr>
     <h3 style="margin:0">Globale Steuer-Einstellungen</h3>
     <p class="hint">Diese Angaben gelten für alle Immobilien und werden für den Steuervergleich je Objekt genutzt (vereinfachte Modellrechnung, jede Immobilie wird isoliert gegen dieses Haushaltseinkommen gerechnet).</p>
     <div class="row2">
@@ -179,6 +194,8 @@ let view='portfolio',currentId=null,equityIsCustom=false,lastMinimumEquity=0,lat
 let clientId=localStorage.getItem('im_clientId')||'',spreadsheetId=localStorage.getItem('im_spreadsheetId')||'';
 let accessToken=null,tokenClient=null,connected=false;
 let syncTimer=null,settingsSyncTimer=null;
+const FS_ACCESS_SUPPORTED='showSaveFilePicker' in window;
+let fileHandle=null,fileConnected=false,filePermissionNeeded=false;
 
 /* ---------- local cache ---------- */
 function cacheLocal(){localStorage.setItem('im_properties',JSON.stringify(properties));localStorage.setItem('im_settings',JSON.stringify(settings))}
@@ -287,11 +304,11 @@ function openReport(type){renderProperty();let m=latestModel,w=window.open('','_
 function setTab(tab){document.body.dataset.tab=tab;document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('active',b.dataset.t===tab));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.id===tab));scrollTo(0,0);renderProperty()}
 
 /* ---------- property CRUD ---------- */
-function markDirty(){cacheLocal();clearTimeout(syncTimer);document.getElementById('syncStatus').textContent='Ungespeicherte Änderungen…';syncTimer=setTimeout(()=>syncProperties(),1200)}
+function markDirty(){cacheLocal();clearTimeout(syncTimer);document.getElementById('syncStatus').textContent='Ungespeicherte Änderungen…';syncTimer=setTimeout(()=>{syncProperties();syncToFile()},1200)}
 function saveCurrent(){let data=gatherForm();if(!currentId)currentId=uuid();let idx=properties.findIndex(x=>x.id===currentId),record={id:currentId,...data};if(idx>=0)properties[idx]=record;else properties.push(record);markDirty()}
 function newProperty(){currentId=null;loadFormFrom(DEFAULT_PROPERTY);let m=computeModel(gatherForm(),settings);document.getElementById('currentLoanBalance').value=Math.round(m.loanAmount);setView('property');renderProperty()}
 function openProperty(id){let p=properties.find(x=>x.id===id);if(!p)return;currentId=id;loadFormFrom(p);setView('property');renderProperty()}
-function deleteCurrent(){if(!currentId){backToPortfolio();return}if(!confirm('Diese Immobilie wirklich löschen?'))return;properties=properties.filter(x=>x.id!==currentId);cacheLocal();syncProperties();backToPortfolio()}
+function deleteCurrent(){if(!currentId){backToPortfolio();return}if(!confirm('Diese Immobilie wirklich löschen?'))return;properties=properties.filter(x=>x.id!==currentId);cacheLocal();syncProperties();syncToFile();backToPortfolio()}
 function backToPortfolio(){setView('portfolio');renderPortfolio()}
 
 /* ---------- portfolio view ---------- */
@@ -331,14 +348,14 @@ function renderPortfolio(){
 }
 function renderConnBanner(){
   const b=document.getElementById('connBanner');
-  if(!connected){b.classList.remove('hidden');b.textContent='Nicht mit Google verbunden – Änderungen werden nur lokal in diesem Browser gespeichert. Über „⚙ Einstellungen" verbinden.'}
+  if(!connected&&!fileConnected){b.classList.remove('hidden');b.textContent='Nicht mit Google oder einer lokalen Datei verbunden – Änderungen werden nur im Browser gespeichert (localStorage). Über „⚙ Einstellungen" verbinden.'}
   else b.classList.add('hidden');
 }
 
 /* ---------- global settings form ---------- */
 function loadSettingsForm(){document.getElementById('householdIncome').value=settings.householdIncome||'';document.getElementById('married').value=settings.married||'no';document.getElementById('children').value=settings.children||0;document.getElementById('childAllowance').value=settings.childAllowance||9756;document.getElementById('flatTax').value=settings.flatTax||40}
 function gatherSettingsForm(){return{householdIncome:Number(document.getElementById('householdIncome').value||0),married:document.getElementById('married').value,children:Number(document.getElementById('children').value||0),childAllowance:Number(document.getElementById('childAllowance').value||0),flatTax:Number(document.getElementById('flatTax').value||0)}}
-function onSettingsInput(){settings=gatherSettingsForm();cacheLocal();renderPortfolio();clearTimeout(settingsSyncTimer);settingsSyncTimer=setTimeout(()=>syncSettings(),1200)}
+function onSettingsInput(){settings=gatherSettingsForm();cacheLocal();renderPortfolio();clearTimeout(settingsSyncTimer);settingsSyncTimer=setTimeout(()=>{syncSettings();syncToFile()},1200)}
 
 /* ---------- view switching ---------- */
 function setView(v){view=v;document.getElementById('portfolioView').classList.toggle('hidden',v!=='portfolio');document.getElementById('propertyView').classList.toggle('hidden',v!=='property');document.getElementById('bottomNav').classList.toggle('hidden',v!=='property');window.scrollTo(0,0)}
@@ -442,6 +459,96 @@ async function syncSettings(){
     await sheetsRequest(`/${spreadsheetId}/values/Settings!A2?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values})});
   }catch(e){console.error(e)}
 }
+/* ---------- lokale Datei (File System Access API) ---------- */
+function idbOpen(){return new Promise((resolve,reject)=>{const req=indexedDB.open('immo_portfolio_fs',1);req.onupgradeneeded=()=>req.result.createObjectStore('handles');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
+async function idbSet(key,val){const db=await idbOpen();return new Promise((resolve,reject)=>{const tx=db.transaction('handles','readwrite');tx.objectStore('handles').put(val,key);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)})}
+async function idbGet(key){const db=await idbOpen();return new Promise((resolve,reject)=>{const tx=db.transaction('handles','readonly');const req=tx.objectStore('handles').get(key);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
+async function createLocalFile(){
+  try{
+    fileHandle=await window.showSaveFilePicker({suggestedName:'immobilien-portfolio.json',types:[{description:'JSON',accept:{'application/json':['.json']}}]});
+    await idbSet('fileHandle',fileHandle);
+    fileConnected=true;filePermissionNeeded=false;
+    await syncToFile();
+    renderFileStatus();renderConnBanner();
+  }catch(e){if(e.name!=='AbortError')alert('Datei konnte nicht erstellt werden: '+e.message)}
+}
+async function openLocalFile(){
+  try{
+    const[handle]=await window.showOpenFilePicker({types:[{description:'JSON',accept:{'application/json':['.json']}}]});
+    fileHandle=handle;await idbSet('fileHandle',fileHandle);
+    await loadFromFileHandle();
+    fileConnected=true;filePermissionNeeded=false;
+    renderFileStatus();renderConnBanner();renderPortfolio();loadSettingsForm();
+  }catch(e){if(e.name!=='AbortError')alert('Datei konnte nicht geöffnet werden: '+e.message)}
+}
+async function loadFromFileHandle(){
+  const file=await fileHandle.getFile(),text=await file.text();
+  if(text.trim()){
+    const data=JSON.parse(text);
+    if(Array.isArray(data.properties)&&data.properties.length>0)properties=data.properties;
+    if(data.settings)settings={...DEFAULT_SETTINGS,...data.settings};
+    cacheLocal();
+  }else if(properties.length>0){
+    await syncToFile();
+  }
+}
+async function syncToFile(){
+  if(!fileHandle||!fileConnected)return;
+  try{
+    const perm=await fileHandle.requestPermission({mode:'readwrite'});
+    if(perm!=='granted'){fileConnected=false;filePermissionNeeded=true;renderFileStatus();renderConnBanner();return}
+    const writable=await fileHandle.createWritable();
+    await writable.write(JSON.stringify({properties,settings},null,2));
+    await writable.close();
+    const st=document.getElementById('fileStatus');if(st)st.textContent='Gespeichert ✓ '+new Date().toLocaleTimeString('de-DE');
+  }catch(e){const st=document.getElementById('fileStatus');if(st)st.textContent='Fehler: '+e.message}
+}
+async function tryReconnectFile(){
+  if(!FS_ACCESS_SUPPORTED)return;
+  try{
+    const handle=await idbGet('fileHandle');
+    if(!handle)return;
+    fileHandle=handle;
+    const perm=await handle.queryPermission({mode:'readwrite'});
+    if(perm==='granted'){fileConnected=true;filePermissionNeeded=false;await loadFromFileHandle();renderPortfolio();loadSettingsForm()}
+    else{fileConnected=false;filePermissionNeeded=true}
+  }catch(e){console.error(e)}
+  renderFileStatus();renderConnBanner();
+}
+async function reconnectFilePermission(){
+  if(!fileHandle)return;
+  try{
+    const perm=await fileHandle.requestPermission({mode:'readwrite'});
+    if(perm==='granted'){fileConnected=true;filePermissionNeeded=false;await loadFromFileHandle();renderPortfolio();loadSettingsForm()}
+  }catch(e){alert('Zugriff auf Datei fehlgeschlagen: '+e.message)}
+  renderFileStatus();renderConnBanner();
+}
+function exportJsonFile(){
+  const blob=new Blob([JSON.stringify({properties,settings},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='immobilien-portfolio.json';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+function importJsonFile(file){
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const data=JSON.parse(reader.result);
+      if(Array.isArray(data.properties))properties=data.properties;
+      if(data.settings)settings={...DEFAULT_SETTINGS,...data.settings};
+      cacheLocal();renderPortfolio();loadSettingsForm();
+      alert('Import erfolgreich.');
+    }catch(e){alert('Datei konnte nicht gelesen werden: '+e.message)}
+  };
+  reader.readAsText(file);
+}
+function renderFileStatus(){
+  const st=document.getElementById('fileStatus');
+  if(!st)return;
+  if(!FS_ACCESS_SUPPORTED){st.textContent='';return}
+  const reBtn=document.getElementById('reconnectFileBtn');
+  if(filePermissionNeeded){reBtn.classList.remove('hidden');st.textContent='Zugriff auf Datei erneut bestätigen'}
+  else{reBtn.classList.add('hidden');st.textContent=fileConnected?'✅ Verbunden':'Nicht verbunden'}
+}
+
 async function afterSignIn(){
   const conn=document.getElementById('connStatus');
   try{
@@ -461,7 +568,7 @@ async function afterSignIn(){
 /* ---------- wiring ---------- */
 document.getElementById('addPropertyBtn').addEventListener('click',newProperty);
 document.getElementById('backBtn').addEventListener('click',backToPortfolio);
-document.getElementById('saveBtn').addEventListener('click',()=>{saveCurrent();syncProperties()});
+document.getElementById('saveBtn').addEventListener('click',()=>{saveCurrent();syncProperties();syncToFile()});
 document.getElementById('deleteBtn').addEventListener('click',deleteCurrent);
 document.getElementById('gearBtn').addEventListener('click',()=>document.getElementById('settingsPanel').classList.toggle('hidden'));
 document.getElementById('saveClientIdBtn').addEventListener('click',()=>{clientId=document.getElementById('clientIdInput').value.trim();localStorage.setItem('im_clientId',clientId);tokenClient=null;initTokenClient();renderAuthBox()});
@@ -471,6 +578,12 @@ document.getElementById('connectSheetBtn').addEventListener('click',async()=>{
   if(accessToken)await afterSignIn();else signIn();
 });
 ['householdIncome','married','children','childAllowance','flatTax'].forEach(id=>document.getElementById(id).addEventListener('input',onSettingsInput));
+document.getElementById('createFileBtn').addEventListener('click',createLocalFile);
+document.getElementById('openFileBtn').addEventListener('click',openLocalFile);
+document.getElementById('reconnectFileBtn').addEventListener('click',reconnectFilePermission);
+document.getElementById('exportFileBtn').addEventListener('click',exportJsonFile);
+document.getElementById('importFileBtn').addEventListener('click',()=>document.getElementById('importFileInput').click());
+document.getElementById('importFileInput').addEventListener('change',(e)=>{if(e.target.files[0])importJsonFile(e.target.files[0]);e.target.value=''});
 document.querySelectorAll('#propertyView aside input,#propertyView aside select,#propertyView aside textarea').forEach(e=>e.addEventListener('input',()=>{if(e.id==='equityTotal')equityIsCustom=true;renderProperty();saveCurrent()}));
 document.getElementById('resetEquity').addEventListener('click',()=>{equityIsCustom=false;document.getElementById('equityTotal').value=val('purchasePrice')*val('purchaseCosts')/100;renderProperty();saveCurrent()});
 document.querySelectorAll('[data-t]').forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.t)));
@@ -485,8 +598,11 @@ loadSettingsForm();
 document.getElementById('clientIdInput').value=clientId;
 document.getElementById('spreadsheetIdInput').value=spreadsheetId;
 if(spreadsheetId)updateSheetLink();
+document.getElementById('fileActionsSupported').classList.toggle('hidden',!FS_ACCESS_SUPPORTED);
+document.getElementById('fileActionsFallback').classList.toggle('hidden',FS_ACCESS_SUPPORTED);
 renderAuthBox();
+renderFileStatus();
 setView('portfolio');
 renderPortfolio();
-window.addEventListener('load',()=>{if(clientId)initTokenClient()});
+window.addEventListener('load',()=>{if(clientId)initTokenClient();tryReconnectFile()});
 </script></body></html>

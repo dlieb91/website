@@ -4,7 +4,14 @@ Web-App zur Verwaltung mehrerer Immobilien: Portfolio-Übersicht (Gesamtwert, au
 
 Start: `index.html` im Browser öffnen (Doppelklick oder z. B. mit `python3 -m http.server` lokal servieren).
 
-Ohne weitere Einrichtung funktioniert die App sofort lokal: Immobilien werden im Browser gespeichert (localStorage). Für eine Synchronisation über mehrere Geräte hinweg kann optional eine eigene Google-Tabelle angebunden werden.
+Ohne weitere Einrichtung funktioniert die App sofort lokal: Immobilien werden im Browser gespeichert (localStorage). Für eine robustere Speicherung oder Synchronisation über mehrere Geräte hinweg stehen zwei optionale Speicherorte zur Verfügung, die auch gleichzeitig aktiv sein können:
+
+## Lokale Datei als Datenspeicher (optional)
+
+Über "⚙ Einstellungen → Lokale Datei" können die Daten direkt in einer Datei auf deinem Gerät gespeichert werden (z. B. in einem iCloud-, OneDrive- oder Dropbox-Ordner, um zwischen Geräten zu synchronisieren):
+
+- **Chrome/Edge** (File System Access API): "Neue Datei erstellen" legt eine `immobilien-portfolio.json` an deinem gewählten Speicherort an; "Vorhandene Datei öffnen" bindet eine bestehende Datei ein. Danach speichert die App bei jeder Änderung automatisch in diese Datei. Der Dateizugriff wird lokal im Browser gemerkt; nach einem Neustart muss der Zugriff ggf. einmal über "Zugriff erneut bestätigen" freigegeben werden (Sicherheitsvorgabe der Browser).
+- **Safari/Firefox** (kein automatischer Dateizugriff möglich): Stattdessen "Als Datei exportieren" (lädt eine JSON-Datei herunter) und "Datei importieren…" (lädt eine zuvor exportierte JSON-Datei wieder in die App). Hier musst du nach Änderungen manuell erneut exportieren.
 
 ## Google Sheets als Datenspeicher einrichten (optional)
 
@@ -19,6 +26,6 @@ Die App kann deine Immobiliendaten direkt in eine Google-Tabelle in deinem eigen
 7. **Anmelden**: Auf "Mit Google anmelden" klicken und den Zugriff auf Google Sheets bestätigen. Die App legt automatisch eine neue Tabelle "Immobilien Portfolio" in deinem Google Drive an (Tabellenblätter "Properties" und "Settings") und merkt sich die Spreadsheet-ID im Browser.
 8. **Auf einem weiteren Gerät verbinden**: Die Spreadsheet-ID (aus dem Link der Tabelle in Google Drive, der Teil zwischen `/d/` und `/edit`) unter "⚙ Einstellungen" eintragen und mit "Verbinden" bestätigen.
 
-Ohne Google-Verbindung funktioniert die App weiterhin normal, Änderungen bleiben dann nur lokal im jeweiligen Browser gespeichert (Banner-Hinweis "Nicht mit Google verbunden").
+Ohne Google-Verbindung und ohne lokale Datei funktioniert die App weiterhin normal, Änderungen bleiben dann nur lokal im jeweiligen Browser gespeichert (Banner-Hinweis "Nicht mit Google oder einer lokalen Datei verbunden").
 
 Hinweis: Vereinfachte Modellrechnung, keine Steuer-, Rechts- oder Anlageberatung.
