@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Entscheidungshelfer</title>
+<meta name="theme-color" content="#075985">
+<meta name="description" content="Gewichtete Kriterien-Matrix zum strukturierten Vergleich von Optionen.">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icons/icon.svg">
+<style>
+  :root{
+    --bg:#f6f8fb; --card-bg:#ffffff; --border:#e1e7ee; --text:#1c2b3a; --muted:#64748b;
+    --accent:#075985; --accent-dark:#053e5e;
+    --green:#16a34a; --yellow:#ca8a04; --orange:#ea580c; --red:#dc2626;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); font-size:16px; line-height:1.4;
+    padding-bottom:76px; /* Platz fuer fixe Aktionsleiste */
+  }
+  .wrap{ max-width:760px; margin:0 auto; padding:16px; }
+  header.appHeader{
+    background:var(--accent); color:#fff; padding:14px 16px;
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+  }
+  header.appHeader h1{ font-size:18px; margin:0; font-weight:600; }
+  header.appHeader button{ background:transparent; border:1px solid rgba(255,255,255,.5); color:#fff; }
+
+  h2{ font-size:16px; margin:0 0 12px; }
+  .card{
+    background:var(--card-bg); border:1px solid var(--border); border-radius:14px;
+    padding:16px; margin-bottom:14px;
+  }
+  .muted{ color:var(--muted); font-size:13px; }
+  .row{ display:flex; align-items:center; gap:10px; }
+  .rowBetween{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .stack{ display:flex; flex-direction:column; gap:10px; }
+
+  button, .btn{
+    font:inherit; cursor:pointer; border:1px solid var(--border); background:#fff;
+    color:var(--text); border-radius:10px; padding:10px 14px; font-size:15px;
+  }
+  button.primary{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.primary:active{ background:var(--accent-dark); }
+  button.ghost{ background:transparent; border-color:transparent; color:var(--accent); padding:6px 8px; }
+  button.danger{ color:var(--red); border-color:var(--red); background:#fff; }
+  button.small{ padding:6px 10px; font-size:13px; }
+  button:disabled{ opacity:.4; cursor:default; }
+
+  input[type=text], input[type=number]{
+    font:inherit; font-size:16px; padding:10px 12px; border:1px solid var(--border);
+    border-radius:10px; width:100%; background:#fff; color:var(--text);
+  }
+  input[type=range]{ height:32px; accent-color:var(--accent); }
+  input[type=checkbox]{ width:20px; height:20px; accent-color:var(--accent); }
+
+  .hidden{ display:none !important; }
+
+  /* Liste */
+  .decisionItem{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:12px; border:1px solid var(--border); border-radius:12px; margin-bottom:8px;
+    cursor:pointer; background:#fff;
+  }
+  .decisionItem:active{ background:#f1f5f9; }
+  .decisionItem .name{ font-weight:600; }
+  .decisionItem .meta{ font-size:12px; color:var(--muted); margin-top:2px; }
+
+  /* Setup */
+  .listRow{ display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); }
+  .listRow:last-child{ border-bottom:none; }
+  .listRow input[type=text]{ flex:1; }
+  .criterionRow{ display:flex; flex-direction:column; gap:8px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .criterionRow:last-child{ border-bottom:none; }
+  .critNameLine{ display:flex; align-items:center; gap:8px; }
+  .critNameLine input[type=text]{ flex:1; }
+  .critMetaLine{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+  .weightSlider{ display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+  .weightSlider input{ width:80px; }
+  .weightSlider .val{ width:16px; text-align:center; font-variant-numeric:tabular-nums; }
+  .invertLabel{ display:flex; align-items:center; gap:4px; font-size:12px; color:var(--muted); flex:0 0 auto; white-space:nowrap; }
+
+  /* Bewertung */
+  .rateGrid{ display:flex; flex-direction:column; gap:14px; }
+  .rateHeader{ display:none; }
+  .optionBlock{ border:1px solid var(--border); border-radius:12px; padding:14px; background:#fff; }
+  .optionBlock h3{ margin:0 0 10px; font-size:15px; }
+  .critRow{ display:flex; align-items:center; gap:10px; padding:6px 0; }
+  .critRow label{ flex:0 0 42%; font-size:13px; color:var(--muted); }
+  .critRow .rateCell{ display:flex; align-items:center; gap:10px; flex:1; }
+  .critRow input[type=range]{ flex:1; }
+  .critRow .val{ width:22px; text-align:right; font-variant-numeric:tabular-nums; font-size:14px; }
+
+  @media (min-width:700px){
+    .rateGrid{
+      display:grid;
+      grid-template-columns: 150px repeat(var(--crit-count,1), 1fr);
+      align-items:center; column-gap:12px; row-gap:2px;
+    }
+    .rateHeader{
+      display:contents;
+    }
+    .rateHeader > div{ font-size:12px; color:var(--muted); font-weight:600; padding-bottom:6px; }
+    .optionBlock{ display:contents; }
+    .optionBlock h3{ font-size:14px; padding:8px 0; }
+    .critRow{ display:contents; }
+    .critRow label{ display:none; }
+    .critRow .val{ justify-self:start; }
+  }
+
+  /* Ergebnis */
+  .rankItem{ border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px; background:#fff; }
+  .rankTop{ display:flex; align-items:center; gap:10px; }
+  .rankPos{ font-weight:700; color:var(--muted); width:22px; }
+  .rankName{ font-weight:600; flex:1; }
+  .dot{ width:12px; height:12px; border-radius:50%; flex:0 0 auto; }
+  .dot.green{ background:var(--green); }
+  .dot.yellow{ background:var(--yellow); }
+  .dot.orange{ background:var(--orange); }
+  .dot.red{ background:var(--red); }
+  .scoreBox{ font-weight:700; font-size:15px; }
+  .barBg{ background:#eef2f6; border-radius:8px; height:10px; margin-top:8px; overflow:hidden; }
+  .barFill{ height:100%; border-radius:8px; background:var(--accent); }
+  details.breakdown{ margin-top:10px; }
+  details.breakdown summary{ cursor:pointer; font-size:13px; color:var(--accent); }
+  .breakdownRow{ display:flex; justify-content:space-between; font-size:13px; padding:4px 0; color:var(--muted); }
+
+  /* Fixe Aktionsleiste */
+  .actionBar{
+    position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--border);
+    padding:10px 16px; display:flex; gap:10px; justify-content:space-between; z-index:5;
+  }
+  .actionBar .spacer{ flex:1; }
+
+  .emptyState{ text-align:center; color:var(--muted); padding:32px 16px; }
+</style>
+</head>
+<body>
+
+<header class="appHeader">
+  <h1>Entscheidungshelfer</h1>
+  <button id="btnHome" class="hidden">Übersicht</button>
+</header>
+
+<div class="wrap">
+
+  <!-- VIEW: Liste -->
+  <section id="view-list">
+    <div class="card">
+      <div class="rowBetween">
+        <h2 style="margin:0">Meine Entscheidungen</h2>
+        <button class="ghost small" id="btnImport">Importieren</button>
+      </div>
+      <input type="file" id="fileImport" accept="application/json" class="hidden">
+      <div id="decisionList" class="stack" style="margin-top:12px"></div>
+      <div id="emptyState" class="emptyState hidden">Noch keine Entscheidung angelegt. Leg los mit "Neue Entscheidung".</div>
+    </div>
+  </section>
+
+  <!-- VIEW: Setup -->
+  <section id="view-setup" class="hidden">
+    <div class="card">
+      <input type="text" id="decisionName" placeholder="Name der Entscheidung, z.B. Jobwahl">
+    </div>
+
+    <div class="card">
+      <div class="rowBetween">
+        <h2>Kriterien</h2>
+        <button class="ghost small" id="btnAddCriterion">+ Kriterium</button>
+      </div>
+      <div id="criteriaList" class="stack"></div>
+      <p class="muted" style="margin-top:8px">Gewichtung 1 (wenig wichtig) bis 5 (sehr wichtig). "Niedriger = besser" für Kriterien wie Preis oder Risiko aktivieren.</p>
+    </div>
+
+    <div class="card">
+      <div class="rowBetween">
+        <h2>Optionen</h2>
+        <button class="ghost small" id="btnAddOption">+ Option</button>
+      </div>
+      <div id="optionsList" class="stack"></div>
+    </div>
+  </section>
+
+  <!-- VIEW: Bewertung -->
+  <section id="view-rate" class="hidden">
+    <div class="card">
+      <h2 id="rateTitle">Bewertung</h2>
+      <p class="muted">Bewerte jede Option pro Kriterium von 0 (schlecht) bis 10 (sehr gut).</p>
+      <div class="rateGrid" id="rateGrid"></div>
+    </div>
+  </section>
+
+  <!-- VIEW: Ergebnis -->
+  <section id="view-result" class="hidden">
+    <div class="card">
+      <h2 id="resultTitle">Ergebnis</h2>
+      <div id="rankList"></div>
+    </div>
+    <div class="card">
+      <button class="small" id="btnExport">Als JSON exportieren</button>
+      <button class="small danger" id="btnDeleteDecision">Entscheidung löschen</button>
+    </div>
+  </section>
+
+</div>
+
+<div class="actionBar" id="actionBarList">
+  <button class="primary" id="btnNewDecision">+ Neue Entscheidung</button>
+</div>
+
+<div class="actionBar hidden" id="actionBarSetup">
+  <button id="btnSetupBack">Zurück</button>
+  <span class="spacer"></span>
+  <button class="primary" id="btnSetupNext">Weiter zur Bewertung</button>
+</div>
+
+<div class="actionBar hidden" id="actionBarRate">
+  <button id="btnRateBack">Zurück</button>
+  <span class="spacer"></span>
+  <button class="primary" id="btnRateNext">Ergebnis anzeigen</button>
+</div>
+
+<div class="actionBar hidden" id="actionBarResult">
+  <button id="btnResultBack">Werte anpassen</button>
+  <span class="spacer"></span>
+  <button class="primary" id="btnResultHome">Zur Übersicht</button>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var STORAGE_KEY = 'entscheidungshelfer:v1:decisions';
+  var state = { decisions: [], currentId: null };
+  var saveTimer = null;
+
+  function uid(prefix){
+    return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  }
+
+  function load(){
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      state.decisions = raw ? JSON.parse(raw) : [];
+    } catch(e){
+      state.decisions = [];
+    }
+  }
+
+  function saveAllNow(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.decisions));
+  }
+
+  function saveAll(debounced){
+    if(!debounced){ saveAllNow(); return; }
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveAllNow, 300);
+  }
+
+  function getCurrent(){
+    return state.decisions.find(function(d){ return d.id === state.currentId; });
+  }
+
+  function newDecision(){
+    return {
+      id: uid('d'),
+      name: 'Neue Entscheidung',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      criteria: [],
+      options: [],
+      scores: {},
+      notes: ''
+    };
+  }
+
+  function computeRanking(decision){
+    var totalWeight = decision.criteria.reduce(function(s,c){ return s + Number(c.weight||0); }, 0) || 1;
+    return decision.options.map(function(opt){
+      var raw = decision.scores[opt.id] || {};
+      var breakdown = decision.criteria.map(function(c){
+        var v = Number(raw[c.id]);
+        if(isNaN(v)) v = 0;
+        if(c.invert) v = 10 - v;
+        var contribution = v * Number(c.weight||0);
+        return { criterionId: c.id, name: c.name, value: v, weight: c.weight, contribution: contribution };
+      });
+      var weightedSum = breakdown.reduce(function(s,b){ return s + b.contribution; }, 0);
+      var score = Math.round((weightedSum / totalWeight) * 10);
+      return { id: opt.id, name: opt.name, score: score, breakdown: breakdown };
+    }).sort(function(a,b){ return b.score - a.score; });
+  }
+
+  function scoreClass(score){
+    if(score >= 75) return 'green';
+    if(score >= 55) return 'yellow';
+    if(score >= 35) return 'orange';
+    return 'red';
+  }
+
+  /* ---------- Views ---------- */
+
+  var views = ['list','setup','rate','result'];
+  var actionBars = { list:'actionBarList', setup:'actionBarSetup', rate:'actionBarRate', result:'actionBarResult' };
+
+  function setView(name){
+    views.forEach(function(v){
+      document.getElementById('view-' + v).classList.toggle('hidden', v !== name);
+      document.getElementById(actionBars[v]).classList.toggle('hidden', v !== name);
+    });
+    document.getElementById('btnHome').classList.toggle('hidden', name === 'list');
+    if(name === 'list') renderList();
+    if(name === 'setup') renderSetup();
+    if(name === 'rate') renderRate();
+    if(name === 'result') renderResult();
+  }
+
+  /* ---------- Liste ---------- */
+
+  function renderList(){
+    var listEl = document.getElementById('decisionList');
+    var emptyEl = document.getElementById('emptyState');
+    listEl.innerHTML = '';
+    if(state.decisions.length === 0){
+      emptyEl.classList.remove('hidden');
+      return;
+    }
+    emptyEl.classList.add('hidden');
+    var sorted = state.decisions.slice().sort(function(a,b){ return new Date(b.updatedAt) - new Date(a.updatedAt); });
+    sorted.forEach(function(d){
+      var el = document.createElement('div');
+      el.className = 'decisionItem';
+      var topText = '';
+      if(d.options.length && d.criteria.length){
+        var ranking = computeRanking(d);
+        if(ranking.length) topText = 'Top: ' + ranking[0].name + ' (' + ranking[0].score + ')';
+      }
+      var date = new Date(d.updatedAt).toLocaleDateString('de-DE');
+      el.innerHTML =
+        '<div>' +
+          '<div class="name"></div>' +
+          '<div class="meta"></div>' +
+        '</div>' +
+        '<button class="ghost small delBtn">Löschen</button>';
+      el.querySelector('.name').textContent = d.name || 'Ohne Namen';
+      el.querySelector('.meta').textContent = date + (topText ? ' · ' + topText : '');
+      el.addEventListener('click', function(e){
+        if(e.target.closest('.delBtn')) return;
+        state.currentId = d.id;
+        setView('setup');
+      });
+      el.querySelector('.delBtn').addEventListener('click', function(e){
+        e.stopPropagation();
+        if(confirm('Diese Entscheidung wirklich löschen?')){
+          state.decisions = state.decisions.filter(function(x){ return x.id !== d.id; });
+          saveAll();
+          renderList();
+        }
+      });
+      listEl.appendChild(el);
+    });
+  }
+
+  document.getElementById('btnNewDecision').addEventListener('click', function(){
+    var d = newDecision();
+    state.decisions.push(d);
+    state.currentId = d.id;
+    saveAll();
+    setView('setup');
+  });
+
+  document.getElementById('btnHome').addEventListener('click', function(){
+    setView('list');
+  });
+
+  /* Export / Import */
+
+  document.getElementById('btnImport').addEventListener('click', function(){
+    document.getElementById('fileImport').click();
+  });
+
+  document.getElementById('fileImport').addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try {
+        var imported = JSON.parse(reader.result);
+        if(!Array.isArray(imported)) throw new Error('invalid');
+        var validItems = imported.filter(function(d){ return d && typeof d.name === 'string' && Array.isArray(d.criteria) && Array.isArray(d.options); });
+        if(validItems.length === 0) throw new Error('empty');
+        var replace = confirm('OK = bestehende Entscheidungen ersetzen. Abbrechen = zu bestehenden hinzufügen.');
+        if(replace){
+          state.decisions = validItems;
+        } else {
+          validItems.forEach(function(d){ d.id = uid('d'); state.decisions.push(d); });
+        }
+        saveAll();
+        renderList();
+      } catch(err){
+        alert('Datei konnte nicht gelesen werden. Bitte eine gültige Export-Datei wählen.');
+      }
+      e.target.value = '';
+    };
+    reader.readAsText(file);
+  });
+
+  document.getElementById('btnExport').addEventListener('click', function(){
+    var d = getCurrent();
+    var data = d ? [d] : state.decisions;
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'entscheidungshelfer-export.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  /* ---------- Setup ---------- */
+
+  function renderSetup(){
+    var d = getCurrent();
+    if(!d) return setView('list');
+
+    var nameInput = document.getElementById('decisionName');
+    nameInput.value = d.name;
+    nameInput.oninput = function(){
+      d.name = nameInput.value;
+      d.updatedAt = new Date().toISOString();
+      saveAll(true);
+    };
+
+    renderCriteriaList(d);
+    renderOptionsList(d);
+
+    document.getElementById('btnSetupNext').disabled = !(d.criteria.length && d.options.length);
+  }
+
+  function renderCriteriaList(d){
+    var el = document.getElementById('criteriaList');
+    el.innerHTML = '';
+    d.criteria.forEach(function(c){
+      var row = document.createElement('div');
+      row.className = 'criterionRow';
+      row.innerHTML =
+        '<div class="critNameLine">' +
+          '<input type="text" class="cName" placeholder="Kriterium, z.B. Gehalt">' +
+          '<button class="ghost small delBtn">✕</button>' +
+        '</div>' +
+        '<div class="critMetaLine">' +
+          '<label class="invertLabel"><input type="checkbox" class="cInvert"> niedriger = besser</label>' +
+          '<div class="weightSlider"><input type="range" min="1" max="5" step="1" class="cWeight"><span class="val cWeightVal"></span></div>' +
+        '</div>';
+      row.querySelector('.cName').value = c.name;
+      row.querySelector('.cInvert').checked = !!c.invert;
+      row.querySelector('.cWeight').value = c.weight;
+      row.querySelector('.cWeightVal').textContent = c.weight;
+
+      row.querySelector('.cName').addEventListener('input', function(e){
+        c.name = e.target.value;
+        d.updatedAt = new Date().toISOString();
+        saveAll(true);
+      });
+      row.querySelector('.cInvert').addEventListener('change', function(e){
+        c.invert = e.target.checked;
+        d.updatedAt = new Date().toISOString();
+        saveAll();
+      });
+      row.querySelector('.cWeight').addEventListener('input', function(e){
+        c.weight = Number(e.target.value);
+        row.querySelector('.cWeightVal').textContent = c.weight;
+        d.updatedAt = new Date().toISOString();
+        saveAll(true);
+      });
+      row.querySelector('.delBtn').addEventListener('click', function(){
+        d.criteria = d.criteria.filter(function(x){ return x.id !== c.id; });
+        d.options.forEach(function(o){ if(d.scores[o.id]) delete d.scores[o.id][c.id]; });
+        saveAll();
+        renderSetup();
+      });
+      el.appendChild(row);
+    });
+  }
+
+  function renderOptionsList(d){
+    var el = document.getElementById('optionsList');
+    el.innerHTML = '';
+    d.options.forEach(function(o){
+      var row = document.createElement('div');
+      row.className = 'listRow';
+      row.innerHTML =
+        '<input type="text" class="oName" placeholder="Option, z.B. Angebot A">' +
+        '<button class="ghost small delBtn">✕</button>';
+      row.querySelector('.oName').value = o.name;
+      row.querySelector('.oName').addEventListener('input', function(e){
+        o.name = e.target.value;
+        d.updatedAt = new Date().toISOString();
+        saveAll(true);
+      });
+      row.querySelector('.delBtn').addEventListener('click', function(){
+        d.options = d.options.filter(function(x){ return x.id !== o.id; });
+        delete d.scores[o.id];
+        saveAll();
+        renderSetup();
+      });
+      el.appendChild(row);
+    });
+  }
+
+  document.getElementById('btnAddCriterion').addEventListener('click', function(){
+    var d = getCurrent();
+    if(!d) return;
+    d.criteria.push({ id: uid('c'), name: '', weight: 3, invert: false });
+    saveAll();
+    renderSetup();
+  });
+
+  document.getElementById('btnAddOption').addEventListener('click', function(){
+    var d = getCurrent();
+    if(!d) return;
+    d.options.push({ id: uid('o'), name: '' });
+    saveAll();
+    renderSetup();
+  });
+
+  document.getElementById('btnSetupBack').addEventListener('click', function(){
+    setView('list');
+  });
+
+  document.getElementById('btnSetupNext').addEventListener('click', function(){
+    var d = getCurrent();
+    if(!d || !d.criteria.length || !d.options.length) return;
+    setView('rate');
+  });
+
+  /* ---------- Bewertung ---------- */
+
+  function renderRate(){
+    var d = getCurrent();
+    if(!d) return setView('list');
+    document.getElementById('rateTitle').textContent = 'Bewertung: ' + (d.name || 'Ohne Namen');
+
+    var grid = document.getElementById('rateGrid');
+    grid.style.setProperty('--crit-count', d.criteria.length || 1);
+    grid.innerHTML = '';
+
+    var header = document.createElement('div');
+    header.className = 'rateHeader';
+    var headerFiller = document.createElement('div');
+    header.appendChild(headerFiller);
+    d.criteria.forEach(function(c){
+      var cell = document.createElement('div');
+      cell.textContent = c.name || '–';
+      header.appendChild(cell);
+    });
+    grid.appendChild(header);
+
+    d.options.forEach(function(o){
+      if(!d.scores[o.id]) d.scores[o.id] = {};
+      var block = document.createElement('div');
+      block.className = 'optionBlock';
+      var h3 = document.createElement('h3');
+      h3.textContent = o.name || 'Ohne Namen';
+      block.appendChild(h3);
+
+      d.criteria.forEach(function(c){
+        var row = document.createElement('div');
+        row.className = 'critRow';
+        var label = document.createElement('label');
+        label.textContent = c.name || '–';
+        var range = document.createElement('input');
+        range.type = 'range'; range.min = 0; range.max = 10; range.step = 1;
+        range.value = d.scores[o.id][c.id] != null ? d.scores[o.id][c.id] : 5;
+        var val = document.createElement('span');
+        val.className = 'val';
+        val.textContent = range.value;
+        range.addEventListener('input', function(){
+          d.scores[o.id][c.id] = Number(range.value);
+          val.textContent = range.value;
+          d.updatedAt = new Date().toISOString();
+          saveAll(true);
+        });
+        var cell = document.createElement('div');
+        cell.className = 'rateCell';
+        cell.appendChild(range); cell.appendChild(val);
+        row.appendChild(label); row.appendChild(cell);
+        block.appendChild(row);
+      });
+      grid.appendChild(block);
+    });
+  }
+
+  document.getElementById('btnRateBack').addEventListener('click', function(){
+    setView('setup');
+  });
+
+  document.getElementById('btnRateNext').addEventListener('click', function(){
+    saveAll();
+    setView('result');
+  });
+
+  /* ---------- Ergebnis ---------- */
+
+  function renderResult(){
+    var d = getCurrent();
+    if(!d) return setView('list');
+    document.getElementById('resultTitle').textContent = 'Ergebnis: ' + (d.name || 'Ohne Namen');
+
+    var ranking = computeRanking(d);
+    var listEl = document.getElementById('rankList');
+    listEl.innerHTML = '';
+
+    ranking.forEach(function(r, i){
+      var item = document.createElement('div');
+      item.className = 'rankItem';
+      var cls = scoreClass(r.score);
+
+      var top = document.createElement('div');
+      top.className = 'rankTop';
+      top.innerHTML =
+        '<span class="rankPos">#' + (i+1) + '</span>' +
+        '<span class="dot ' + cls + '"></span>' +
+        '<span class="rankName"></span>' +
+        '<span class="scoreBox">' + r.score + '</span>';
+      top.querySelector('.rankName').textContent = r.name || 'Ohne Namen';
+      item.appendChild(top);
+
+      var barBg = document.createElement('div');
+      barBg.className = 'barBg';
+      var barFill = document.createElement('div');
+      barFill.className = 'barFill';
+      barFill.style.width = Math.max(0, Math.min(100, r.score)) + '%';
+      barBg.appendChild(barFill);
+      item.appendChild(barBg);
+
+      var details = document.createElement('details');
+      details.className = 'breakdown';
+      var summary = document.createElement('summary');
+      summary.textContent = 'Warum dieser Rang?';
+      details.appendChild(summary);
+      r.breakdown.forEach(function(b){
+        var row = document.createElement('div');
+        row.className = 'breakdownRow';
+        row.innerHTML = '<span></span><span>' + b.value + ' × Gewicht ' + b.weight + ' = ' + Math.round(b.contribution) + '</span>';
+        row.querySelector('span').textContent = b.name || '–';
+        details.appendChild(row);
+      });
+      item.appendChild(details);
+
+      listEl.appendChild(item);
+    });
+  }
+
+  document.getElementById('btnResultBack').addEventListener('click', function(){
+    setView('rate');
+  });
+
+  document.getElementById('btnResultHome').addEventListener('click', function(){
+    setView('list');
+  });
+
+  document.getElementById('btnDeleteDecision').addEventListener('click', function(){
+    var d = getCurrent();
+    if(!d) return;
+    if(confirm('Diese Entscheidung wirklich löschen?')){
+      state.decisions = state.decisions.filter(function(x){ return x.id !== d.id; });
+      saveAll();
+      setView('list');
+    }
+  });
+
+  /* ---------- Init ---------- */
+
+  load();
+  setView('list');
+
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('./sw.js').catch(function(){});
+    });
+  }
+})();
+</script>
+</body>
+</html>
