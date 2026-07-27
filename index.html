@@ -3,11 +3,13 @@
 @media(max-width:900px){.layout{grid-template-columns:1fr}.kpis,.scens{grid-template-columns:1fr 1fr}.scoreRow{grid-template-columns:1fr}aside{position:static}}
 @media(max-width:700px){header{padding:18px 14px}h1{font-size:22px}.wrap{padding:10px 10px 78px}.desktop{display:none!important}.mobile{display:block!important}.row2,.kpis,.scens{grid-template-columns:1fr}.tabs{display:none}.bottom{display:grid;grid-template-columns:repeat(6,1fr);position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--bd);z-index:20}.bottom button{border:0;background:#fff;color:var(--mut);font-size:11px;font-weight:800;padding:6px 2px}.bottom button.active{color:var(--blue)}.bottom span{display:block;font-size:20px}.tbl,table{display:none!important}body:not([data-tab="dash"]) aside{display:none!important}.layout{display:block}.score{font-size:34px}}
 </style></head><body data-tab="dash"><header><h1>🏠 Immobilien Investment Check</h1><p class="sub">v18: Sanierungskosten sind im Fremdkapital berücksichtigt und wirken steuerlich in Jahr 1.</p></header>
-<div id="startView" class="wrap"><div class="card" style="text-align:center;padding:32px 20px"><h2 style="margin-top:0">Wie möchtest du starten?</h2><p class="hint">Wähle den Quickcheck für eine schnelle Ersteinschätzung mit wenigen Eingaben und sinnvollen Annahmen, oder die detaillierte Prüfung mit allen Stellschrauben.</p><div class="actions" style="justify-content:center;margin-top:20px"><button id="startQuickBtn" class="btn primary" style="padding:16px 22px;font-size:16px">⚡ Quickcheck<br><span style="font-weight:400;font-size:12px">5 Eingaben, Rest Annahmen</span></button><button id="startDetailBtn" class="btn" style="padding:16px 22px;font-size:16px">🔎 Detaillierte Prüfung<br><span style="font-weight:400;font-size:12px">Alle Eingaben selbst festlegen</span></button></div></div></div>
+<div id="startView" class="wrap"><div class="card" style="text-align:center;padding:32px 20px"><h2 style="margin-top:0">Wie möchtest du starten?</h2><p class="hint">Wähle den Quickcheck für eine schnelle Ersteinschätzung mit wenigen Eingaben und sinnvollen Annahmen, oder die detaillierte Prüfung mit allen Stellschrauben.</p><div class="actions" style="justify-content:center;margin-top:20px"><button id="startQuickBtn" class="btn primary" style="padding:16px 22px;font-size:16px">⚡ Quickcheck</button><button id="startDetailBtn" class="btn" style="padding:16px 22px;font-size:16px">🔎 Detaillierte Prüfung</button></div></div></div>
 <div id="quickView" class="wrap hidden"><div class="card"><h2 style="margin-top:0">⚡ Quickcheck</h2><p class="hint">Für eine schnelle Einschätzung reichen diese Angaben. Für den Rest arbeiten wir mit realistischen Standardannahmen (unten aufgeführt) – du kannst danach jederzeit alle Details einsehen und anpassen.</p><div class="inputs">
 <label>Kaufpreis (€)<input id="qPurchasePrice" type="number" value="248000" step="1000" min="0"></label>
 <label>Wohnfläche (m²)<input id="qAreaSqm" type="number" value="62" step="1" min="1"></label>
-<label>Nettokaltmiete pro Monat (€)<input id="qRent" type="number" value="770" step="10" min="0"></label>
+<label>Mieteingabe<select id="qRentMode"><option value="sqm">Euro pro Quadratmeter</option><option value="absolute">Absolute Kaltmiete pro Monat</option></select></label>
+<label id="qRentPerSqmWrap">Nettokaltmiete pro m² (€)<input id="qRentPerSqm" type="number" value="12.42" step="0.1" min="0"></label>
+<label id="qRentAbsoluteWrap" class="hidden">Absolute Kaltmiete pro Monat (€)<input id="qRentAbsolute" type="number" value="770" step="10" min="0"></label>
 <label>Kaufnebenkosten (%)<input id="qCosts" type="number" value="7" step="0.1" min="0"></label>
 <p class="hint" style="margin-top:-6px">Summe aus Notarkosten, Grundbucheintrag, Grunderwerbsteuer und Maklerprovision.</p>
 <label>Eigenkapital (€)<input id="qEquity" type="number" placeholder="leer = Kaufnebenkosten (Vollfinanzierung)" step="1000" min="0"></label>
@@ -53,12 +55,15 @@ function openReport(type){render();let m=latestModel,w=window.open('','_blank');
 function setTab(tab){document.body.dataset.tab=tab;document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('active',b.dataset.t===tab));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.id===tab));scrollTo(0,0);render()}
 document.querySelectorAll('input,select').forEach(e=>e.addEventListener('input',()=>{if(e.id==='equityTotal')equityIsCustom=true;render()}));purchasePrice.addEventListener('input',()=>render());purchaseCosts.addEventListener('input',()=>render());resetEquity.addEventListener('click',()=>{equityIsCustom=false;equityTotal.value=val('purchasePrice')*val('purchaseCosts')/100;render()});document.querySelectorAll('[data-t]').forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.t)));repDash.addEventListener('click',()=>openReport('dashboard'));repCash.addEventListener('click',()=>openReport('cashflow'));repCash2.addEventListener('click',()=>openReport('cashflow'));toggle.addEventListener('click',()=>{document.body.classList.toggle('hideInputs');toggle.textContent=document.body.classList.contains('hideInputs')?'▶ Eingaben anzeigen':'◀ Eingaben ausblenden';render()});
 function showStart(){startView.classList.remove('hidden');quickView.classList.add('hidden');detailView.classList.add('hidden')}
-function showQuick(){startView.classList.add('hidden');quickView.classList.remove('hidden');detailView.classList.add('hidden')}
+function updateQuickVisibility(){let abs=qRentMode.value==='absolute';qRentPerSqmWrap.classList.toggle('hidden',abs);qRentAbsoluteWrap.classList.toggle('hidden',!abs)}
+function showQuick(){startView.classList.add('hidden');quickView.classList.remove('hidden');detailView.classList.add('hidden');updateQuickVisibility()}
 function showDetail(startHidden){startView.classList.add('hidden');quickView.classList.add('hidden');detailView.classList.remove('hidden');document.body.classList.toggle('hideInputs',!!startHidden);toggle.textContent=document.body.classList.contains('hideInputs')?'▶ Eingaben anzeigen':'◀ Eingaben ausblenden';setTab('dash')}
 function runQuickcheck(){
   purchasePrice.value=Math.max(0,Number(qPurchasePrice.value||0));
   areaSqm.value=Math.max(1,Number(qAreaSqm.value||0));
-  rentMode.value='absolute';rentAbsolute.value=Math.max(0,Number(qRent.value||0));
+  rentMode.value=qRentMode.value;
+  rentPerSqm.value=Math.max(0,Number(qRentPerSqm.value||0));
+  rentAbsolute.value=Math.max(0,Number(qRentAbsolute.value||0));
   interestRate.value=Number(qInterest.value||0);
   purchaseCosts.value=Math.max(0,Number(qCosts.value||0));repaymentRate.value=1;rentGrowth.value=2;linearAfa.value=2;
   nonRecoverable.value=Math.round(val('areaSqm')*18);
@@ -69,6 +74,7 @@ function runQuickcheck(){
   showDetail(true);
 }
 startQuickBtn.addEventListener('click',showQuick);
+qRentMode.addEventListener('change',updateQuickVisibility);
 startDetailBtn.addEventListener('click',()=>showDetail(false));
 qBackBtn.addEventListener('click',showStart);
 qCalcBtn.addEventListener('click',runQuickcheck);
