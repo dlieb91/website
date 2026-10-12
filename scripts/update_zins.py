@@ -23,7 +23,7 @@ def fetch():
                 v = float(cell.replace(",", "."))
             except ValueError:
                 continue
-            period = row[0] if i > 0 else ""
+            period = row[i - 1] if i > 0 else ""
             return v, period
     raise ValueError("Kein Zahlenwert in der Antwort gefunden")
 
