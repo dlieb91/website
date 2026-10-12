@@ -1,0 +1,19 @@
+name: Marktzins aktualisieren
+on:
+  schedule:
+    - cron: "17 5 * * 1-5"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/update_zins.py
+      - name: Commit bei Aenderung
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add zins.json
+          git diff --cached --quiet || (git commit -m "Marktzins aktualisiert" && git push)

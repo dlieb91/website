@@ -306,7 +306,29 @@ function toggleTheme(){
   const btn=document.getElementById('themeToggle');
   if(btn){btn.textContent=next?'☀️ Light Mode':'🌙 Dark Mode';}
 }
+/* Marktzins-Vorschlag aus zins.json (taeglich per GitHub Action) */
+const FINANCING_MARKUP=1.0;
+function initMarketRate(){
+  let hadStored=false;try{hadStored=!!localStorage.getItem(STORAGE_KEY)}catch(err){}
+  fetch('zins.json',{cache:'no-cache'}).then(r=>r.ok?r.json():Promise.reject()).then(d=>{
+    if(!d||typeof d.baseRate!=='number')return;
+    let suggested=Math.round((d.baseRate+FINANCING_MARKUP)*100)/100;
+    let stand=d.updated?new Date(d.updated).toLocaleDateString('de-DE'):'';
+    ['interestRate','qcInterestRate'].forEach(id=>{
+      let inp=document.getElementById(id);if(!inp)return;
+      let note=document.createElement('div');note.className='hint';
+      let btn=document.createElement('button');btn.type='button';btn.className='btn';btn.textContent='Marktzins übernehmen ('+suggested.toFixed(2).replace('.',',')+' %)';
+      btn.addEventListener('click',()=>{inp.value=suggested;inp.dispatchEvent(new Event('input',{bubbles:true}))});
+      note.textContent='Marktzins Wohnungsbaukredite '+d.baseRate.toFixed(2).replace('.',',')+' % + '+FINANCING_MARKUP.toFixed(1).replace('.',',')+' % Aufschlag für 100-%-Finanzierung (Näherung, Stand '+stand+', Quelle: Bundesbank). ';
+      note.appendChild(btn);
+      let host=inp.closest('label'),row=host.parentElement;(row&&row.classList.contains('row2')?row:host).insertAdjacentElement('afterend',note);
+      if(!hadStored)inp.value=suggested;
+    });
+    if(!hadStored)render();
+  }).catch(()=>{});
+}
 restoreInputs();
+initMarketRate();
 updateQcVisibility();
 lastMinimumEquity=val('purchasePrice')*val('purchaseCosts')/100;
 initTheme();
